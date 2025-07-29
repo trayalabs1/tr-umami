@@ -272,11 +272,11 @@ SELECT DISTINCT
     ed.session_id,
     ed.event_id,
     ed.event_name,
-    c.currency,
+    coalesce(c.currency, 'INR') currency,
     coalesce(toDecimal64(ed.number_value, 2), toDecimal64(ed.string_value, 2)) revenue,
     ed.created_at
 FROM umami.event_data ed
-JOIN (SELECT event_id, string_value as currency
+LEFT JOIN (SELECT event_id, string_value as currency
         FROM umami.event_data
         WHERE positionCaseInsensitive(data_key, 'currency') > 0) c
       ON c.event_id = ed.event_id
