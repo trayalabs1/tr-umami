@@ -31,6 +31,7 @@ function error(msg) {
 }
 
 async function checkEnv() {
+  console.log('checking env variables...', process.env);
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not defined.');
   } else {
