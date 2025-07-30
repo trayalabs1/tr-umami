@@ -85,9 +85,8 @@ async function applyMigration() {
   if (!process.env.SKIP_DB_MIGRATION) {
     console.log(execSync('prisma migrate deploy').toString());
 
-    success('Database is up to date.');
+    success('Database is up to date..');
   }
-  console.log(`Running applicable migrations...`);
 }
 
 (async () => {
