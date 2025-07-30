@@ -87,6 +87,7 @@ async function applyMigration() {
 
     success('Database is up to date.');
   }
+  console.log(`Running applicable migrations...`);
 }
 
 (async () => {
