@@ -237,7 +237,9 @@ export async function POST(request: Request) {
           distinctId: id,
           createdAt,
         });
-        await eventDataCollector(`profile_identified_${data?.case_id || ''}_${data?.phone || ''}`);
+        await eventDataCollector(
+          `profile_identified_${data?.caseId || ''}_${data?.phone_number || ''}`,
+        );
       }
     }
 

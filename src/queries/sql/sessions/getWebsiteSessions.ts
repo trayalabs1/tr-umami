@@ -100,15 +100,22 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters, pagePar
       lastAt as createdAt
     from website_event
     ${cohortQuery}
+    left join session_data sd 
+      on website_event.session_id = sd.session_id
     where website_id = {websiteId:UUID}
     ${dateQuery}
     ${filterQuery}
     ${
       search
-        ? `and ((positionCaseInsensitive(distinct_id, {search:String}) > 0)
+        ? `and (
+              (positionCaseInsensitive(distinct_id, {search:String}) > 0)
            or (positionCaseInsensitive(city, {search:String}) > 0)
            or (positionCaseInsensitive(browser, {search:String}) > 0)
            or (positionCaseInsensitive(os, {search:String}) > 0)
+           or (
+            sd.data_key IN ('phone_number','email','caseId')
+            AND positionCaseInsensitive(sd.string_value, {search:String}) > 0
+           )
            or (positionCaseInsensitive(device, {search:String}) > 0))`
         : ''
     }
@@ -134,22 +141,30 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters, pagePar
       sumIf(views, event_type = 1) as views,
       lastAt as createdAt
     from website_event_stats_hourly website_event
+    left join session_data sd 
+      on website_event.session_id = sd.session_id
     ${cohortQuery}
     where website_id = {websiteId:UUID}
     ${dateQuery}
     ${filterQuery}
     ${
       search
-        ? `and ((positionCaseInsensitive(distinct_id, {search:String}) > 0)
-           or (positionCaseInsensitive(city, {search:String}) > 0)
-           or (positionCaseInsensitive(browser, {search:String}) > 0)
-           or (positionCaseInsensitive(os, {search:String}) > 0)
-           or (positionCaseInsensitive(device, {search:String}) > 0))`
+        ? `and (
+             (positionCaseInsensitive(distinct_id, {search:String}) > 0)
+          or (positionCaseInsensitive(city, {search:String}) > 0)
+          or (positionCaseInsensitive(browser, {search:String}) > 0)
+          or (positionCaseInsensitive(os, {search:String}) > 0)
+          or (positionCaseInsensitive(device, {search:String}) > 0)
+          or (
+            sd.data_key IN ('phone_number','email','caseId')
+            AND positionCaseInsensitive(sd.string_value, {search:String}) > 0
+          )
+        )`
         : ''
     }
     group by session_id, website_id, browser, os, device, screen, language, country, region, city
     order by lastAt desc
-    `;
+  `;
   }
 
   return pagedQuery(sql, { ...params, search }, pageParams);
