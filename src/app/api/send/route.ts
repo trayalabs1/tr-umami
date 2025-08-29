@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       iat = now;
     }
 
-    if (type === COLLECTION_TYPE.event) {
+    const eventDataCollector = async (eventName = name) => {
       const base = hostname ? `https://${hostname}` : 'https://localhost';
       const currentUrl = new URL(url, base);
 
@@ -203,7 +203,7 @@ export async function POST(request: Request) {
         city,
 
         // Events
-        eventName: name,
+        eventName: eventName,
         eventData: data,
         tag,
 
@@ -222,6 +222,10 @@ export async function POST(request: Request) {
         lifatid,
         twclid,
       });
+    };
+
+    if (type === COLLECTION_TYPE.event) {
+      await eventDataCollector();
     }
 
     if (type === COLLECTION_TYPE.identify) {
@@ -233,6 +237,7 @@ export async function POST(request: Request) {
           distinctId: id,
           createdAt,
         });
+        await eventDataCollector(`profile_identified_${data?.case_id || ''}_${data?.phone || ''}`);
       }
     }
 
