@@ -100,14 +100,15 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters, pagePar
       lastAt as createdAt
     from website_event
     ${cohortQuery}
-    inner join session_data sd 
+    left join session_data sd 
       on website_event.session_id = sd.session_id
     where website_id = {websiteId:UUID}
     ${dateQuery}
     ${filterQuery}
     ${
       search
-        ? `and ((positionCaseInsensitive(distinct_id, {search:String}) > 0)
+        ? `and (
+              (positionCaseInsensitive(distinct_id, {search:String}) > 0)
            or (positionCaseInsensitive(city, {search:String}) > 0)
            or (positionCaseInsensitive(browser, {search:String}) > 0)
            or (positionCaseInsensitive(os, {search:String}) > 0)
@@ -140,7 +141,7 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters, pagePar
       sumIf(views, event_type = 1) as views,
       lastAt as createdAt
     from website_event_stats_hourly website_event
-    inner join session_data sd 
+    left join session_data sd 
       on website_event.session_id = sd.session_id
     ${cohortQuery}
     where website_id = {websiteId:UUID}
