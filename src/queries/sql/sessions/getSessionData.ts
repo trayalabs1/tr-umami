@@ -49,6 +49,7 @@ async function clickhouseQuery(websiteId: string, sessionId: string) {
     from session_data final
     where website_id = {websiteId:UUID}
     and session_id = {sessionId:UUID}
+    and data_key not in ('phone_number', 'email')
     order by data_key asc
     `,
     { websiteId, sessionId },
