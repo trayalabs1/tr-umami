@@ -44,7 +44,7 @@ export async function GET(
     if (event.eventName === 'profile_identified') {
       const caseId = event.eventData.find(data => data.dataKey === 'caseId')?.stringValue;
       const phNo = event.eventData.find(data => data.dataKey === 'phone_number')?.stringValue;
-      event.eventName = `profile_identify_${caseId || ''}_${phNo ? '****' + phNo.slice(-4) : ''}`;
+      event.eventName = `profile_identified_${caseId || ''}_${phNo ? '****' + phNo.slice(-4) : ''}`;
     }
     delete event.eventData;
   }
