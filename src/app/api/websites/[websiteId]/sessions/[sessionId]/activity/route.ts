@@ -30,6 +30,24 @@ export async function GET(
   const endDate = new Date(+endAt);
 
   const data = await getSessionActivity(websiteId, sessionId, startDate, endDate);
+  const parsedData = data.map(event => ({
+    ...event,
+    eventData: event.eventData.map(([, dataKey, , stringValue, , numberValue, , dateValue]) => ({
+      dataKey,
+      stringValue,
+      numberValue,
+      dateValue,
+    })),
+  }));
+  // const profileIdentifyEventIds: string[] = [];
+  for (const event of parsedData) {
+    if (event.eventName === 'profile_identified') {
+      const caseId = event.eventData.find(data => data.dataKey === 'caseId')?.stringValue;
+      const phNo = event.eventData.find(data => data.dataKey === 'phone_number')?.stringValue;
+      event.eventName = `profile_identify_${caseId || ''}_${phNo ? '****' + phNo.slice(-4) : ''}`;
+    }
+    delete event.eventData;
+  }
 
-  return json(data);
+  return json(parsedData);
 }
