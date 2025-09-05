@@ -48,17 +48,18 @@ async function clickhouseQuery(
         we.event_name AS eventName,
         we.visit_id AS visitId,
         groupArray(
-            (
-            'dataKey', ed.data_key,
-            'stringValue', ed.string_value,
-            'numberValue', ed.number_value,
-            'dateValue', ed.date_value
-          )
+          (
+           'dataKey', ed.data_key,
+           'stringValue', ed.string_value,
+           'numberValue', ed.number_value,
+           'dateValue', ed.date_value
+            )
         ) AS eventData
       FROM website_event AS we
              LEFT JOIN event_data AS ed
                        ON we.event_id = ed.event_id
                          AND we.website_id = ed.website_id
+                         AND we.event_name = 'profile_identified'
       WHERE we.website_id = {websiteId:UUID}
         AND we.session_id = {sessionId:UUID}
         AND we.created_at BETWEEN {startDate:DateTime64} AND {endDate:DateTime64}
@@ -72,7 +73,7 @@ async function clickhouseQuery(
         we.event_name,
         we.visit_id
       ORDER BY we.created_at DESC
-        LIMIT 500
+        LIMIT 500;
     `,
     { websiteId, sessionId, startDate, endDate },
   );

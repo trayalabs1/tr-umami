@@ -29,8 +29,7 @@ export async function GET(
   const startDate = new Date(+startAt);
   const endDate = new Date(+endAt);
 
-  let data = await getSessionActivity(websiteId, sessionId, startDate, endDate);
-  data = JSON.parse(JSON.stringify(data));
+  const data = await getSessionActivity(websiteId, sessionId, startDate, endDate);
   const parsedData = data.map(event => ({
     ...event,
     eventData: event.eventData.map(([, dataKey, , stringValue, , numberValue, , dateValue]) => ({
