@@ -3,6 +3,7 @@ import debug from 'debug';
 import { Kafka, Producer, RecordMetadata, SASLOptions, logLevel } from 'kafkajs';
 import { KAFKA, KAFKA_PRODUCER } from '@/lib/db';
 import * as tls from 'tls';
+import { sleep } from '@/lib/utils';
 
 const log = debug('umami:kafka');
 const CONNECT_TIMEOUT = 5000;
@@ -68,6 +69,10 @@ async function sendMessage(
 ): Promise<RecordMetadata[]> {
   try {
     await connect();
+
+    if (!producer) {
+      await sleep(500);
+    }
 
     return producer.send({
       topic,
