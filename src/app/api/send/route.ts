@@ -12,6 +12,10 @@ import { COLLECTION_TYPE } from '@/lib/constants';
 import { anyObjectParam, urlOrPathParam } from '@/lib/schema';
 import { safeDecodeURI, safeDecodeURIComponent } from '@/lib/url';
 import { createSession, saveEvent, saveSessionData } from '@/queries';
+import { isDataSafe } from '@/lib/security';
+import debug from 'debug';
+
+const log = debug('umami:send');
 
 const schema = z.object({
   type: z.enum(['event', 'identify']),
@@ -42,6 +46,19 @@ export async function POST(request: Request) {
     }
 
     const { type, payload } = body;
+
+    // Additional security validation for data field
+    if (payload.data) {
+      const safetyCheck = isDataSafe(payload.data);
+      if (!safetyCheck.safe) {
+        log('[SECURITY] Rejected request with unsafe data:', {
+          reason: safetyCheck.reason,
+          websiteId: payload.website,
+          data: JSON.stringify(payload.data),
+        });
+        return badRequest(`Invalid data: ${safetyCheck.reason}`);
+      }
+    }
 
     const {
       website: websiteId,
