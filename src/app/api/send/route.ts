@@ -44,6 +44,9 @@ const schema = z.object({
       browser: z.string().optional(),
       os: z.string().optional(),
       device: z.string().optional(),
+      deviceModel: z.string().max(50).optional(),
+      osVersion: z.string().max(50).optional(),
+      appVersion: z.string().max(50).optional()
     })
     .refine(
       data => {
@@ -83,6 +86,9 @@ export async function POST(request: Request) {
       tag,
       timestamp,
       id,
+      deviceModel,
+      osVersion,
+      appVersion,
     } = payload;
 
     const sourceId = websiteId || pixelId || linkId;
@@ -257,6 +263,11 @@ export async function POST(request: Request) {
         ttclid,
         lifatid,
         twclid,
+
+        // Mobile specific
+        deviceModel,
+        osVersion,
+        appVersion,
       });
     };
 

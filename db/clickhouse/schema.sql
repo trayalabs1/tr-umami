@@ -39,6 +39,11 @@ CREATE TABLE umami.website_event
     event_name String,
     tag String,
     distinct_id String,
+    --mobile specific
+    device_model String,
+    os_version String,
+    app_version String,
+
     created_at DateTime('UTC'),
     job_id Nullable(UUID)
 )

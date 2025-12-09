@@ -34,6 +34,11 @@ export interface SaveEventArgs {
   region?: string;
   city?: string;
 
+  // Mobile specific
+  deviceModel?: string;
+  osVersion?: string;
+  appVersion?: string;
+
   // Events
   eventName?: string;
   eventData?: any;
@@ -89,6 +94,9 @@ async function relationalQuery({
   ttclid,
   lifatid,
   twclid,
+  deviceModel,
+  osVersion,
+  appVersion,
 }: SaveEventArgs) {
   const websiteEventId = uuid();
 
@@ -119,6 +127,9 @@ async function relationalQuery({
       eventName: eventName ? eventName?.substring(0, EVENT_NAME_LENGTH) : null,
       tag,
       hostname,
+      deviceModel,
+      osVersion,
+      appVersion,
       createdAt,
     },
   });
@@ -186,6 +197,9 @@ async function clickhouseQuery({
   ttclid,
   lifatid,
   twclid,
+  deviceModel,
+  osVersion,
+  appVersion,
 }: SaveEventArgs) {
   const { insert, getUTCString } = clickhouse;
   const { sendMessage } = kafka;
@@ -227,6 +241,9 @@ async function clickhouseQuery({
     screen,
     language,
     hostname,
+    device_model: deviceModel,
+    os_version: osVersion,
+    app_version: appVersion,
   };
 
   if (kafka.enabled) {
