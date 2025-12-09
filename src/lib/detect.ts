@@ -155,7 +155,7 @@ export async function getClientInfo(request: Request, payload: Record<string, an
   const region = safeDecodeURIComponent(location?.region);
   const city = safeDecodeURIComponent(location?.city);
   const browser = browserName(userAgent);
-  const os = detectOS(userAgent) as string;
+  const os = payload.os ?? (detectOS(userAgent) as string);
   const device = getDevice(payload?.screen, os);
 
   return { userAgent, browser, os, ip, country, region, city, device };
