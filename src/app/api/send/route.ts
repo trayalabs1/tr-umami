@@ -30,6 +30,9 @@ const schema = z.object({
     userAgent: z.string().optional(),
     timestamp: z.coerce.number().int().optional(),
     id: z.string().optional(),
+    deviceModel: z.string().max(50).optional(),
+    osVersion: z.string().max(50).optional(),
+    appVersion: z.string().max(50).optional(),
   }),
 });
 
@@ -56,6 +59,9 @@ export async function POST(request: Request) {
       tag,
       timestamp,
       id,
+      deviceModel,
+      osVersion,
+      appVersion,
     } = payload;
 
     // Cache check
@@ -221,6 +227,11 @@ export async function POST(request: Request) {
         ttclid,
         lifatid,
         twclid,
+
+        // Mobile specific
+        deviceModel,
+        osVersion,
+        appVersion,
       });
     };
 
