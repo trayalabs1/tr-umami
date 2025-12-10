@@ -120,6 +120,10 @@ model WebsiteEvent {
   eventName      String?   @map("event_name") @db.VarChar(50)
   tag            String?   @db.VarChar(50)
   hostname       String?   @db.VarChar(100)
+  deviceModel    String?   @map("device_model") @db.VarChar(100)
+  deviceBrand    String?   @map("device_brand") @db.VarChar(50)
+  appVersion     String?   @map("app_version") @db.VarChar(50)
+  osVersion      String?   @map("os_version") @db.VarChar(50)
 
   eventData EventData[]
   session   Session     @relation(fields: [sessionId], references: [id])
