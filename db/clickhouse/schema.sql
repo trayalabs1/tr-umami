@@ -41,6 +41,7 @@ CREATE TABLE umami.website_event
     distinct_id String,
     --mobile specific
     device_model String,
+    device_brand String,
     os_version String,
     app_version String,
 

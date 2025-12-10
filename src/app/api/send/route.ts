@@ -31,6 +31,7 @@ const schema = z.object({
     timestamp: z.coerce.number().int().optional(),
     id: z.string().optional(),
     deviceModel: z.string().max(50).optional(),
+    deviceBrand: z.string().max(50).optional(),
     osVersion: z.string().max(50).optional(),
     appVersion: z.string().max(50).optional(),
   }),
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
       timestamp,
       id,
       deviceModel,
+      deviceBrand,
       osVersion,
       appVersion,
     } = payload;
@@ -230,6 +232,7 @@ export async function POST(request: Request) {
 
         // Mobile specific
         deviceModel,
+        deviceBrand,
         osVersion,
         appVersion,
       });
