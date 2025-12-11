@@ -36,6 +36,7 @@ export interface SaveEventArgs {
 
   // Mobile specific
   deviceModel?: string;
+  deviceBrand?: string;
   osVersion?: string;
   appVersion?: string;
 
@@ -95,6 +96,7 @@ async function relationalQuery({
   lifatid,
   twclid,
   deviceModel,
+  deviceBrand,
   osVersion,
   appVersion,
 }: SaveEventArgs) {
@@ -128,6 +130,7 @@ async function relationalQuery({
       tag,
       hostname,
       deviceModel,
+      deviceBrand,
       osVersion,
       appVersion,
       createdAt,
@@ -198,6 +201,7 @@ async function clickhouseQuery({
   lifatid,
   twclid,
   deviceModel,
+  deviceBrand,
   osVersion,
   appVersion,
 }: SaveEventArgs) {
@@ -242,6 +246,7 @@ async function clickhouseQuery({
     language,
     hostname,
     device_model: deviceModel,
+    device_brand: deviceBrand,
     os_version: osVersion,
     app_version: appVersion,
   };
