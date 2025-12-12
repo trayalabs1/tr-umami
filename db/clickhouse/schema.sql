@@ -39,6 +39,12 @@ CREATE TABLE umami.website_event
     event_name String,
     tag String,
     distinct_id String,
+    --mobile specific
+    device_model String,
+    device_brand String,
+    os_version String,
+    app_version String,
+
     created_at DateTime('UTC'),
     job_id Nullable(UUID)
 )
@@ -57,7 +63,7 @@ CREATE TABLE umami.event_data
     event_name String,
     data_key String,
     string_value Nullable(String),
-    number_value Nullable(Decimal64(4)),
+    number_value Nullable(Decimal(22, 4)),
     date_value Nullable(DateTime('UTC')),
     data_type UInt32,
     created_at DateTime('UTC'),
@@ -73,7 +79,7 @@ CREATE TABLE umami.session_data
     session_id UUID,
     data_key String,
     string_value Nullable(String),
-    number_value Nullable(Decimal64(4)),
+    number_value Nullable(Decimal(22, 4)),
     date_value Nullable(DateTime('UTC')),
     data_type UInt32,
     distinct_id String,
@@ -209,7 +215,7 @@ FROM (SELECT
     arrayFilter(x -> x != '', groupArray(twclid)) twclid,
     event_type,
     if(event_type = 2, groupArray(event_name), []) event_name,
-    sumIf(1, event_type = 1) views,
+    sumIf(1, event_type != 2) views,
     min(created_at) min_time,
     max(created_at) max_time,
     arrayFilter(x -> x != '', groupArray(tag)) tag,
