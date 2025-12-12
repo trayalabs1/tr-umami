@@ -67,7 +67,7 @@ export interface SaveEventArgs {
   twclid?: string;
 }
 
-export async function saveEvent(args: SaveEventArgs) {
+export function saveEvent(args: SaveEventArgs) {
   eventEmitter.emit('SAVE_EVENT', args);
 }
 

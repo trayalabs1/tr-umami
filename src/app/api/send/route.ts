@@ -47,7 +47,7 @@ const schema = z.object({
       deviceModel: z.string().max(50).optional(),
       deviceBrand: z.string().max(50).optional(),
       osVersion: z.string().max(50).optional(),
-      appVersion: z.string().max(50).optional()
+      appVersion: z.string().max(50).optional(),
     })
     .refine(
       data => {
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
       iat = now;
     }
 
-    const eventDataCollector = async (eventName = name) => {
+    const eventDataCollector = (eventName = name) => {
       const base = hostname ? `https://${hostname}` : 'https://localhost';
       const currentUrl = new URL(url, base);
 
@@ -219,7 +219,7 @@ export async function POST(request: Request) {
             ? EVENT_TYPE.customEvent
             : EVENT_TYPE.pageView;
 
-      await saveEvent({
+      saveEvent({
         websiteId: sourceId,
         sessionId,
         visitId,
@@ -275,19 +275,19 @@ export async function POST(request: Request) {
     };
 
     if (type === COLLECTION_TYPE.event) {
-      await eventDataCollector();
+      eventDataCollector();
     }
 
     if (type === COLLECTION_TYPE.identify) {
       if (data) {
-        await saveSessionData({
+        saveSessionData({
           websiteId,
           sessionId,
           sessionData: data,
           distinctId: id,
           createdAt,
         });
-        await eventDataCollector(`profile_identified`);
+        eventDataCollector(`profile_identified`);
       }
     }
 
