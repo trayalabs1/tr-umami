@@ -90,6 +90,7 @@
     "detect-browser": "^5.2.0",
     "dotenv": "^17.2.3",
     "esbuild": "^0.25.11",
+    "eventemitter3": "5.0.1",
     "fs-extra": "^11.3.2",
     "immer": "^10.2.0",
     "ipaddr.js": "^2.3.0",

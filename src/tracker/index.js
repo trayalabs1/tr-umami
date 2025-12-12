@@ -159,6 +159,8 @@
 
     if (!payload) return;
 
+    const cacheValue = cache || localStorage?.getItem('umami.cache');
+
     try {
       const res = await fetch(endpoint, {
         keepalive: true,
@@ -166,7 +168,7 @@
         body: JSON.stringify({ type, payload }),
         headers: {
           'Content-Type': 'application/json',
-          ...(typeof cache !== 'undefined' && { 'x-umami-cache': cache }),
+          ...(typeof cacheValue !== 'undefined' && cacheValue && { 'x-umami-cache': cacheValue }),
         },
         credentials,
       });
@@ -175,6 +177,7 @@
       if (data) {
         disabled = !!data.disabled;
         cache = data.cache;
+        window.localStorage?.setItem('umami.cache', cache);
       }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {

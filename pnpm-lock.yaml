@@ -95,6 +95,9 @@ importers:
       esbuild:
         specifier: ^0.25.11
         version: 0.25.12
+      eventemitter3:
+        specifier: ^5.0.1
+        version: 5.0.1
       fs-extra:
         specifier: ^11.3.2
         version: 11.3.2
