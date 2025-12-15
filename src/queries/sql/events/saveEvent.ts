@@ -1,3 +1,5 @@
+import debug from 'debug';
+import EventEmitter from 'eventemitter3';
 import clickhouse from '@/lib/clickhouse';
 import { EVENT_NAME_LENGTH, PAGE_TITLE_LENGTH, URL_LENGTH } from '@/lib/constants';
 import { uuid } from '@/lib/crypto';
@@ -6,6 +8,13 @@ import kafka from '@/lib/kafka';
 import prisma from '@/lib/prisma';
 import { saveEventData } from './saveEventData';
 import { saveRevenue } from './saveRevenue';
+
+const log = debug('umami:saveEvent');
+
+const eventEmitter = new EventEmitter();
+eventEmitter.on('SAVE_EVENT', async (args: SaveEventArgs) => {
+  await saveEventAsync(args);
+});
 
 export interface SaveEventArgs {
   websiteId: string;
@@ -61,8 +70,12 @@ export interface SaveEventArgs {
   twclid?: string;
 }
 
-export async function saveEvent(args: SaveEventArgs) {
-  return runQuery({
+export function saveEvent(args: SaveEventArgs) {
+  eventEmitter.emit('SAVE_EVENT', args);
+}
+
+async function saveEventAsync(args: SaveEventArgs) {
+  await runQuery({
     [PRISMA]: () => relationalQuery(args),
     [CLICKHOUSE]: () => clickhouseQuery(args),
   });
@@ -252,6 +265,7 @@ async function clickhouseQuery({
   };
 
   if (kafka.enabled) {
+    log('Sending website_event to Kafka');
     await sendMessage('event', message);
   } else {
     await insert('website_event', [message]);

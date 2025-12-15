@@ -1,3 +1,4 @@
+import EventEmitter from 'eventemitter3';
 import clickhouse from '@/lib/clickhouse';
 import { DATA_TYPE } from '@/lib/constants';
 import { uuid } from '@/lib/crypto';
@@ -7,6 +8,11 @@ import kafka from '@/lib/kafka';
 import prisma from '@/lib/prisma';
 import type { DynamicData } from '@/lib/types';
 
+const eventEmitter = new EventEmitter();
+eventEmitter.on('SAVE_SESSION', async args => {
+  await saveSessionDataAsync(args);
+});
+
 export interface SaveSessionDataArgs {
   websiteId: string;
   sessionId: string;
@@ -15,8 +21,12 @@ export interface SaveSessionDataArgs {
   createdAt?: Date;
 }
 
-export async function saveSessionData(data: SaveSessionDataArgs) {
-  return runQuery({
+export function saveSessionData(data: SaveSessionDataArgs) {
+  eventEmitter.emit('SAVE_SESSION', data);
+}
+
+async function saveSessionDataAsync(data: SaveSessionDataArgs) {
+  await runQuery({
     [PRISMA]: () => relationalQuery(data),
     [CLICKHOUSE]: () => clickhouseQuery(data),
   });
