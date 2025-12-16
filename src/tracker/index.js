@@ -152,12 +152,21 @@
     if (trackingDisabled()) return;
 
     const callback = window[beforeSend];
+    const uniqueId = payload?.data?.uniqueId;
 
     if (typeof callback === 'function') {
       payload = await Promise.resolve(callback(type, payload));
     }
 
     if (!payload) return;
+
+    if (uniqueId) {
+      const localId = localStorage?.getItem(`umami.u.${uniqueId}`);
+      if (localId) {
+        console.log(`UMAMI: skipping duplicate event for ${uniqueId}`);
+        return;
+      }
+    }
 
     const cacheValue = cache || localStorage?.getItem('umami.cache');
 
@@ -178,6 +187,10 @@
         disabled = !!data.disabled;
         cache = data.cache;
         window.localStorage?.setItem('umami.cache', cache);
+
+        if (uniqueId) {
+          window.localStorage?.setItem(`umami.u.${uniqueId}`, 1);
+        }
       }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {
