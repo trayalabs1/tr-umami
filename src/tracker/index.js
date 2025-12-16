@@ -153,6 +153,7 @@
 
     const callback = window[beforeSend];
     const uniqueId = payload?.data?.uniqueId;
+    const eventId = uniqueId && payload?.name ? `${payload.name}-${uniqueId}` : undefined;
 
     if (typeof callback === 'function') {
       payload = await Promise.resolve(callback(type, payload));
@@ -160,10 +161,10 @@
 
     if (!payload) return;
 
-    if (uniqueId) {
-      const localId = localStorage?.getItem(`umami.u.${uniqueId}`);
+    if (eventId) {
+      const localId = localStorage?.getItem(`umami.u.${eventId}`);
       if (localId) {
-        console.log(`UMAMI: skipping duplicate event for ${uniqueId}`);
+        console.log(`UMAMI: skipping duplicate event for ${eventId}`);
         return;
       }
     }
@@ -189,7 +190,7 @@
         window.localStorage?.setItem('umami.cache', cache);
 
         if (uniqueId) {
-          window.localStorage?.setItem(`umami.u.${uniqueId}`, 1);
+          window.localStorage?.setItem(`umami.u.${eventId}`, 1);
         }
       }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
