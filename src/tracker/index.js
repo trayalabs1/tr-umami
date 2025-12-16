@@ -152,6 +152,8 @@
     if (trackingDisabled()) return;
 
     const callback = window[beforeSend];
+    const uniqueId = payload?.data?.uniqueId;
+    const eventId = uniqueId && payload?.name ? `${payload.name}-${uniqueId}` : undefined;
 
     if (typeof callback === 'function') {
       payload = await Promise.resolve(callback(type, payload));
@@ -159,7 +161,15 @@
 
     if (!payload) return;
 
-    const cacheValue = cache || localStorage?.getItem('umami.cache');
+    if (eventId) {
+      const localId = getLSItem(`umami.u.${eventId}`);
+      if (localId) {
+        console.log(`UMAMI: skipping duplicate event for ${eventId}`);
+        return;
+      }
+    }
+
+    const cacheValue = cache || getLSItem('umami.cache');
 
     try {
       const res = await fetch(endpoint, {
@@ -177,7 +187,11 @@
       if (data) {
         disabled = !!data.disabled;
         cache = data.cache;
-        window.localStorage?.setItem('umami.cache', cache);
+        setLSItem('umami.cache', cache);
+
+        if (uniqueId) {
+          setLSItem(`umami.u.${eventId}`, 1);
+        }
       }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {
@@ -199,6 +213,20 @@
     if (typeof name === 'object') return send({ ...name });
     if (typeof name === 'function') return send(name(getPayload()));
     return send(getPayload());
+  };
+
+  const getLSItem = key => {
+    try {
+      return window?.localStorage?.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const setLSItem = (key, value) => {
+    try {
+      window?.localStorage?.setItem(key, value);
+    } catch (e) {}
   };
 
   const identify = (id, data) => {
