@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@clickhouse/client':
         specifier: ^1.12.0
-        version: 1.14.0
+        version: 1.15.0
       '@date-fns/utc':
         specifier: ^1.2.0
         version: 1.2.0
@@ -562,11 +562,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@clickhouse/client-common@1.14.0':
-    resolution: {integrity: sha512-CyUcv2iCkZ1A++vmOSufYRpHR3aAWVfbrWed7ATzf0yyx/BW/2SEqlL07vBpSRa3BIkQe/DSOHVv8JkWZpUOwQ==}
+  '@clickhouse/client-common@1.15.0':
+    resolution: {integrity: sha512-/1BXaNNsBzH2w5ALWiH6M9zS+cJwlM9uMnMj9e8ETwvDjJzO+nIYlyxzp8Prc+9pEDZ5iAilZ4F8c0YVCzzNaA==}
 
-  '@clickhouse/client@1.14.0':
-    resolution: {integrity: sha512-co2spjR7wZoZ3Ck0H/jv76bpiuO3oJHtOmq9/gxFiod2DcT9NFg01u/hXcG8MJFnEJuMB6e3vGqS6IOnLwHqRw==}
+  '@clickhouse/client@1.15.0':
+    resolution: {integrity: sha512-QmW+p4c/r0oa3X6Un6lcBs4GZtJEQUdvf//x8GeqM5ru6m4oIUg3WwvermP3HE31kpEGoFOQfKbMN5ooR5gvNw==}
     engines: {node: '>=16'}
 
   '@colors/colors@1.5.0':
@@ -7449,11 +7449,11 @@ snapshots:
   '@biomejs/cli-win32-x64@2.3.8':
     optional: true
 
-  '@clickhouse/client-common@1.14.0': {}
+  '@clickhouse/client-common@1.15.0': {}
 
-  '@clickhouse/client@1.14.0':
+  '@clickhouse/client@1.15.0':
     dependencies:
-      '@clickhouse/client-common': 1.14.0
+      '@clickhouse/client-common': 1.15.0
 
   '@colors/colors@1.5.0':
     optional: true

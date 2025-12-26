@@ -1,16 +1,15 @@
-ARG NODE_IMAGE_VERSION="22-alpine"
+ARG BUN_IMAGE_VERSION="1.3-alpine"
 
 # Install dependencies only when needed
-FROM node:${NODE_IMAGE_VERSION} AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
+FROM oven/bun:${BUN_IMAGE_VERSION} AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm
+RUN bun install -g pnpm
 RUN pnpm install --frozen-lockfile
 
 # Rebuild the source code only when needed
-FROM node:${NODE_IMAGE_VERSION} AS builder
+FROM oven/bun:${BUN_IMAGE_VERSION} AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -34,24 +33,24 @@ ENV KAFKA_BROKER=$KAFKA_BROKER
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build-docker
+RUN bun run build-docker
 
 # Production image, copy all the files and run next
-FROM node:${NODE_IMAGE_VERSION} AS runner
+FROM oven/bun:${BUN_IMAGE_VERSION} AS runner
 WORKDIR /app
 
 ARG PRISMA_VERSION="6.19.0"
-ARG NODE_OPTIONS
+ARG BUN_OPTIONS
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS=$NODE_OPTIONS
+ENV BUN_OPTIONS=$BUN_OPTIONS
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 RUN set -x \
     && apk add --no-cache curl \
-    && npm install -g pnpm
+    && bun install -g pnpm
 
 # Script dependencies
 RUN pnpm --allow-build='@prisma/engines' add npm-run-all dotenv chalk semver \
@@ -75,4 +74,4 @@ EXPOSE 3000
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-CMD ["pnpm", "start-docker"]
+CMD ["bun", "run", "start-docker"]
