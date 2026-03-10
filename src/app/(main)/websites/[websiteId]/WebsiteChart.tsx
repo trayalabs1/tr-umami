@@ -1,8 +1,11 @@
+import { Column, Row } from '@umami/react-zen';
 import { useMemo } from 'react';
 import { LoadingPanel } from '@/components/common/LoadingPanel';
-import { useDateRange, useTimezone } from '@/components/hooks';
+import { useDateRange, useLocale, useTimezone } from '@/components/hooks';
 import { useWebsitePageviewsQuery } from '@/components/hooks/queries/useWebsitePageviewsQuery';
+import { DownloadButton } from '@/components/input/DownloadButton';
 import { PageviewsChart } from '@/components/metrics/PageviewsChart';
+import { generateTimeSeries } from '@/lib/date';
 
 export function WebsiteChart({
   websiteId,
@@ -14,6 +17,7 @@ export function WebsiteChart({
   const { timezone } = useTimezone();
   const { dateRange, dateCompare } = useDateRange({ timezone: timezone });
   const { startDate, endDate, unit, value } = dateRange;
+  const { dateLocale } = useLocale();
   const { data, isLoading, isFetching, error } = useWebsitePageviewsQuery({
     websiteId,
     compare: compareMode ? dateCompare?.compare : undefined,
@@ -47,15 +51,31 @@ export function WebsiteChart({
     return { pageviews: [], sessions: [] };
   }, [data, startDate, endDate, unit]);
 
+  const csvData = useMemo(() => {
+    if (!pageviews || !sessions) return [];
+    const visitorsTS = generateTimeSeries(sessions, startDate, endDate, unit, dateLocale);
+    const viewsTS = generateTimeSeries(pageviews, startDate, endDate, unit, dateLocale);
+    return visitorsTS.map(({ x, y }, i) => ({
+      time: x,
+      visitors: y ?? 0,
+      views: viewsTS[i]?.y ?? 0,
+    }));
+  }, [pageviews, sessions, startDate, endDate, unit, dateLocale]);
+
   return (
-    <LoadingPanel data={data} isFetching={isFetching} isLoading={isLoading} error={error}>
-      <PageviewsChart
-        key={value}
-        data={chartData}
-        minDate={startDate}
-        maxDate={endDate}
-        unit={unit}
-      />
-    </LoadingPanel>
+    <Column gap="2">
+      <Row justifyContent="flex-end">
+        <DownloadButton filename="overview" data={csvData} />
+      </Row>
+      <LoadingPanel data={data} isFetching={isFetching} isLoading={isLoading} error={error}>
+        <PageviewsChart
+          key={value}
+          data={chartData}
+          minDate={startDate}
+          maxDate={endDate}
+          unit={unit}
+        />
+      </LoadingPanel>
+    </Column>
   );
 }
