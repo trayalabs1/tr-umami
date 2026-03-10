@@ -134,10 +134,6 @@ async function clickhouseQuery(
 > {
   const { startDate, endDate, window, steps } = parameters;
   const { rawQuery, parseFilters } = clickhouse;
-  const { levelOneQuery, levelQuery, sumQuery, stepFilterQuery, params } = getFunnelQuery(
-    steps,
-    window,
-  );
   const { filterQuery, cohortQuery, queryParams } = parseFilters({
     ...filters,
     websiteId,
@@ -145,88 +141,52 @@ async function clickhouseQuery(
     endDate,
   });
 
-  function getFunnelQuery(
-    steps: { type: string; value: string }[],
-    window: number,
-  ): {
-    levelOneQuery: string;
-    levelQuery: string;
-    sumQuery: string;
-    stepFilterQuery: string;
-    params: Record<string, string>;
-  } {
-    return steps.reduce(
-      (pv, cv, i) => {
-        const levelNumber = i + 1;
-        const startSum = i > 0 ? 'union all ' : '';
-        const startFilter = i > 0 ? 'or' : '';
-        const isURL = cv.type === 'path';
-        const column = isURL ? 'url_path' : 'event_name';
+  const windowSeconds = window * 60;
+  const stepConditions: string[] = [];
+  const stepFilterParts: string[] = [];
+  const params: Record<string, string> = {};
 
-        let operator = '=';
-        let paramValue = cv.value;
+  steps.forEach((step, i) => {
+    const isURL = step.type === 'path';
+    const column = isURL ? 'url_path' : 'event_name';
 
-        if (cv.value.startsWith('*') || cv.value.endsWith('*')) {
-          operator = 'like';
-          paramValue = cv.value.replace(/^\*|\*$/g, '%');
-        }
+    let operator = '=';
+    let paramValue = step.value;
 
-        if (levelNumber === 1) {
-          pv.levelOneQuery = `\n
-          level1 AS (
-            select *
-            from level0
-            where ${column} ${operator} {param${i}:String}
-          )`;
-        } else {
-          pv.levelQuery += `\n
-          , level${levelNumber} AS (
-            select distinct y.session_id as session_id,
-                y.url_path as url_path,
-                y.referrer_path as referrer_path,
-                y.event_name,
-                y.created_at as created_at
-            from level${i} x
-            join level0 y
-            on x.session_id = y.session_id
-            where y.created_at between x.created_at and x.created_at + interval ${window} minute
-                and y.${column} ${operator} {param${i}:String}
-          )`;
-        }
+    if (step.value.startsWith('*') || step.value.endsWith('*')) {
+      operator = 'like';
+      paramValue = step.value.replace(/^\*|\*$/g, '%');
+    }
 
-        pv.sumQuery += `\n${startSum}select ${levelNumber} as level, count(distinct(session_id)) as count from level${levelNumber}`;
-        pv.stepFilterQuery += `${startFilter} ${column} ${operator} {param${i}:String} `;
-        pv.params[`param${i}`] = paramValue;
+    stepConditions.push(`${column} ${operator} {param${i}:String}`);
+    stepFilterParts.push(`${column} ${operator} {param${i}:String}`);
+    params[`param${i}`] = paramValue;
+  });
 
-        return pv;
-      },
-      {
-        levelOneQuery: '',
-        levelQuery: '',
-        sumQuery: '',
-        stepFilterQuery: '',
-        params: {},
-      },
-    );
-  }
+  const conditionsSQL = stepConditions.join(', ');
+  const stepFilterQuery = stepFilterParts.join(' or ');
 
   return rawQuery(
     `
-    WITH level0 AS (
-      select distinct session_id, url_path, referrer_path, event_name, created_at
-      from website_event
-      ${cohortQuery}
-      where (${stepFilterQuery})
-        and website_id = {websiteId:UUID}
-        and created_at between {startDate:DateTime64} and {endDate:DateTime64}
-       ${filterQuery}
-    ),
-    ${levelOneQuery}
-    ${levelQuery}
-    select *
-    from (
-      ${sumQuery} 
-    ) ORDER BY level;
+    SELECT
+        level,
+        count() AS count
+    FROM (
+        SELECT
+            session_id,
+            windowFunnel(${windowSeconds})(created_at, ${conditionsSQL}) AS max_level
+        FROM website_event
+        ${cohortQuery}
+        WHERE website_id = {websiteId:UUID}
+          AND created_at BETWEEN {startDate:DateTime64} AND {endDate:DateTime64}
+          AND (${stepFilterQuery})
+          ${filterQuery}
+        GROUP BY session_id
+        HAVING max_level > 0
+    )
+    ARRAY JOIN arrayMap(i -> i + 1, range(max_level)) AS level
+    GROUP BY level
+    ORDER BY level ASC;
     `,
     {
       ...params,
@@ -241,7 +201,8 @@ const formatResults = (steps: { type: string; value: string }[]) => (results: un
     const previous = Number(results[i - 1]?.count) || 0;
     const dropped = previous > 0 ? previous - visitors : 0;
     const dropoff = 1 - visitors / previous;
-    const remaining = visitors / Number(results[0].count);
+    const firstCount = Number(results[0]?.count) || 0;
+    const remaining = firstCount > 0 ? visitors / firstCount : 0;
 
     return {
       ...step,
