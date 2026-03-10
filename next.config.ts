@@ -187,6 +187,7 @@ export default {
   },
   basePath,
   output: 'standalone',
+  cleanDistDir: false,
   eslint: {
     ignoreDuringBuilds: true,
   },
