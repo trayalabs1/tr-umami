@@ -53,6 +53,11 @@ RUN set -x \
     && apk add --no-cache curl \
     && npm install -g pnpm
 
+# Script dependencies
+RUN pnpm --allow-build='@prisma/engines' add npm-run-all dotenv chalk semver \
+    prisma@${PRISMA_VERSION} \
+    @prisma/adapter-pg@${PRISMA_VERSION}
+
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
@@ -62,11 +67,6 @@ COPY --from=builder /app/generated ./generated
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Script dependencies — must run AFTER standalone copy, which overwrites node_modules
-RUN pnpm --allow-build='@prisma/engines' add npm-run-all dotenv chalk semver \
-    prisma@${PRISMA_VERSION} \
-    @prisma/adapter-pg@${PRISMA_VERSION}
 
 USER nextjs
 
