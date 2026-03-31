@@ -1,5 +1,4 @@
 import { startOfHour, startOfMonth } from 'date-fns';
-import debug from 'debug';
 import { isbot } from 'isbot';
 import { serializeError } from 'serialize-error';
 import { z } from 'zod';
@@ -14,8 +13,6 @@ import { badRequest, forbidden, json, serverError } from '@/lib/response';
 import { anyObjectParam, urlOrPathParam } from '@/lib/schema';
 import { safeDecodeURI, safeDecodeURIComponent } from '@/lib/url';
 import { createSession, saveEvent, saveSessionData } from '@/queries/sql';
-
-const log = debug('umami:send');
 
 interface Cache {
   websiteId: string;
@@ -66,13 +63,8 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const startTime = Date.now();
-  const timings: Record<string, number | boolean> = {};
-
   try {
-    const parseStart = Date.now();
     const { body, error } = await parseRequest(request, schema, { skipAuth: true });
-    timings.parseRequest = Date.now() - parseStart;
 
     if (error) {
       return error();
@@ -107,7 +99,6 @@ export async function POST(request: Request) {
     let cache: Cache | null = null;
 
     if (websiteId) {
-      const cacheStart = Date.now();
       const cacheHeader = request.headers.get('x-umami-cache');
 
       if (cacheHeader) {
@@ -117,29 +108,22 @@ export async function POST(request: Request) {
           cache = result;
         }
       }
-      timings.parseToken = Date.now() - cacheStart;
 
       // Find website
-      const fetchStart = Date.now();
       if (!cache?.websiteId) {
         const website = await fetchWebsite(websiteId);
 
         if (!website) {
           return badRequest({ message: 'Website not found.' });
         }
-      } else {
-        timings.fetchWebsiteSkipped = true;
       }
-      timings.fetchWebsite = Date.now() - fetchStart;
     }
 
     // Client info
-    const clientInfoStart = Date.now();
     const { ip, userAgent, device, browser, os, country, region, city } = await getClientInfo(
       request,
       payload,
     );
-    timings.getClientInfo = Date.now() - clientInfoStart;
 
     // Bot check
     if (!process.env.DISABLE_BOT_CHECK && isbot(userAgent)) {
@@ -308,15 +292,6 @@ export async function POST(request: Request) {
     }
 
     const token = createToken({ websiteId, sessionId, visitId, iat }, secret());
-
-    timings.total = Date.now() - startTime;
-
-    // Log performance metrics
-    log('[PERFORMANCE]', {
-      type,
-      cached: !!cache,
-      timings: JSON.stringify(timings),
-    });
 
     return json({ cache: token, sessionId, visitId });
   } catch (e) {
