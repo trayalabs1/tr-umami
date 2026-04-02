@@ -147,7 +147,7 @@ function initializeBatchBuffer(): void {
  */
 async function sendMessage(
   topic: string,
-  message: Record<string, string | number> | Record<string, string | number>[],
+  message: Record<string, unknown> | Record<string, unknown>[],
 ): Promise<void> {
   if (!batchBuffer) {
     initializeBatchBuffer();
