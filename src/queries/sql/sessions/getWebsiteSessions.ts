@@ -161,7 +161,7 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters) {
     ${searchQuery}
     group by session_id, website_id, hostname, browser, os, device, screen, language, country, region, city
     order by lastAt desc
-    `;
+  `;
   }
 
   return pagedRawQuery(sql, queryParams, filters, FUNCTION_NAME);

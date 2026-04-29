@@ -246,7 +246,7 @@ export async function POST(request: Request) {
             ? EVENT_TYPE.customEvent
             : EVENT_TYPE.pageView;
 
-      await saveEvent({
+      saveEvent({
         websiteId: sourceId,
         sessionId,
         visitId,
@@ -305,7 +305,7 @@ export async function POST(request: Request) {
       await eventDataCollector();
     } else if (type === COLLECTION_TYPE.identify) {
       if (data) {
-        await saveSessionData({
+        saveSessionData({
           websiteId,
           sessionId,
           sessionData: data,
