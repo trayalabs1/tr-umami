@@ -22,6 +22,13 @@ const trackerScriptURL = process.env.TRACKER_SCRIPT_URL || '';
 const selfTrack = process.env.UMAMI_SELF_TRACK || '';
 const selfRecord = process.env.UMAMI_SELF_RECORD || '';
 
+// Kafka batching configuration
+const kafkaBatchWindowMs = process.env.KAFKA_BATCH_WINDOW_MS || '10';
+const kafkaMaxQueueSize = process.env.KAFKA_MAX_QUEUE_SIZE || '500';
+const kafkaConnectTimeout = process.env.KAFKA_CONNECT_TIMEOUT || '10000';
+const kafkaSendTimeout = process.env.KAFKA_SEND_TIMEOUT || '30000';
+const kafkaAcks = process.env.KAFKA_ACKS || '1';
+
 const contentSecurityPolicy = `
   default-src 'self';
   img-src 'self' https: data:;
@@ -195,6 +202,12 @@ export default withNextIntl({
     defaultLocale,
     selfTrack,
     selfRecord,
+    // Kafka batching configuration
+    KAFKA_BATCH_WINDOW_MS: kafkaBatchWindowMs,
+    KAFKA_MAX_QUEUE_SIZE: kafkaMaxQueueSize,
+    KAFKA_CONNECT_TIMEOUT: kafkaConnectTimeout,
+    KAFKA_SEND_TIMEOUT: kafkaSendTimeout,
+    KAFKA_ACKS: kafkaAcks,
   },
   basePath,
   output: 'standalone',

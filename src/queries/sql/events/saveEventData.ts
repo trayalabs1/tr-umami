@@ -72,7 +72,23 @@ async function clickhouseQuery(data: SaveEventDataArgs) {
   });
 
   if (kafka.enabled) {
-    await sendMessage('event_data', messages);
+    // Send one Kafka message per umami event with all attributes bundled
+    const bundledMessage = {
+      website_id: websiteId,
+      session_id: sessionId,
+      event_id: eventId,
+      url_path: urlPath,
+      event_name: eventName,
+      created_at: getUTCString(createdAt),
+      event_data: jsonKeys.map(({ key, value, dataType }) => ({
+        data_key: key,
+        data_type: dataType,
+        string_value: getStringValue(value, dataType),
+        number_value: dataType === DATA_TYPE.number ? value : null,
+        date_value: dataType === DATA_TYPE.date ? getUTCString(value) : null,
+      })),
+    };
+    await sendMessage('event_data', bundledMessage);
   } else {
     await insert('event_data', messages);
   }

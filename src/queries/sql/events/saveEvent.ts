@@ -60,6 +60,12 @@ export interface SaveEventArgs {
   cls?: number;
   fcp?: number;
   ttfb?: number;
+
+  // Mobile specific
+  deviceModel?: string;
+  deviceBrand?: string;
+  osVersion?: string;
+  appVersion?: string;
 }
 
 export async function saveEvent(args: SaveEventArgs) {
@@ -101,6 +107,10 @@ async function relationalQuery({
   cls,
   fcp,
   ttfb,
+  deviceModel,
+  deviceBrand,
+  osVersion,
+  appVersion,
 }: SaveEventArgs) {
   const websiteEventId = uuid();
 
@@ -131,6 +141,10 @@ async function relationalQuery({
       eventName: eventName ? eventName?.substring(0, EVENT_NAME_LENGTH) : null,
       tag,
       hostname,
+      deviceModel,
+      deviceBrand,
+      osVersion,
+      appVersion,
       lcp,
       inp,
       cls,
@@ -208,6 +222,10 @@ async function clickhouseQuery({
   cls,
   fcp,
   ttfb,
+  deviceModel,
+  deviceBrand,
+  osVersion,
+  appVersion,
 }: SaveEventArgs) {
   const { insert, getUTCString } = clickhouse;
   const { sendMessage } = kafka;
@@ -249,6 +267,10 @@ async function clickhouseQuery({
     screen: screen,
     language: language,
     hostname: hostname,
+    device_model: deviceModel,
+    device_brand: deviceBrand,
+    os_version: osVersion,
+    app_version: appVersion,
     lcp: lcp,
     inp: inp,
     cls: cls,

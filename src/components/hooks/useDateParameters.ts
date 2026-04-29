@@ -2,16 +2,16 @@ import { useDateRange } from './useDateRange';
 import { useTimezone } from './useTimezone';
 
 export function useDateParameters() {
+  const { timezone, toUtc, canonicalizeTimezone } = useTimezone();
   const {
     dateRange: { startDate, endDate, unit },
-  } = useDateRange();
-  const { timezone, localToUtc, canonicalizeTimezone } = useTimezone();
+  } = useDateRange({ timezone });
 
   return {
-    startAt: +localToUtc(startDate),
-    endAt: +localToUtc(endDate),
-    startDate: localToUtc(startDate).toISOString(),
-    endDate: localToUtc(endDate).toISOString(),
+    startAt: +toUtc(startDate),
+    endAt: +toUtc(endDate),
+    startDate: toUtc(startDate).toISOString(),
+    endDate: toUtc(endDate).toISOString(),
     unit,
     timezone: canonicalizeTimezone(timezone),
   };

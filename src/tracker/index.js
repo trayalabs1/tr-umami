@@ -160,16 +160,40 @@
     (domain && !domains.includes(hostname)) ||
     (dnt && hasDoNotTrack());
 
+  const getLSItem = key => {
+    try {
+      return window?.localStorage?.getItem(key);
+    } catch (_e) {
+      return null;
+    }
+  };
+
+  const setLSItem = (key, value) => {
+    try {
+      window?.localStorage?.setItem(key, value);
+    } catch (_e) {
+      /* no-op */
+    }
+  };
+
   const send = async (payload, type = 'event') => {
     if (trackingDisabled()) return;
 
     const callback = window[beforeSend];
+    const uniqueId = payload?.data?.uniqueId;
+    const eventId = uniqueId && payload?.name ? `${payload.name}-${uniqueId}` : undefined;
 
     if (typeof callback === 'function') {
       payload = await Promise.resolve(callback(type, payload));
     }
 
     if (!payload) return;
+
+    if (eventId && getLSItem(`umami.u.${eventId}`)) {
+      // eslint-disable-next-line no-console
+      console.log(`UMAMI: skipping duplicate event for ${eventId}`);
+      return;
+    }
 
     try {
       const res = await fetch(endpoint, {
@@ -187,6 +211,10 @@
       if (data) {
         disabled = !!data.disabled;
         cache = data.cache;
+
+        if (eventId) {
+          setLSItem(`umami.u.${eventId}`, '1');
+        }
       }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {

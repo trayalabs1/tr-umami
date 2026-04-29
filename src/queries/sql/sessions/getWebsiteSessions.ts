@@ -90,7 +90,14 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters) {
            or (positionCaseInsensitive(city, {search:String}) > 0)
            or (positionCaseInsensitive(browser, {search:String}) > 0)
            or (positionCaseInsensitive(os, {search:String}) > 0)
-           or (positionCaseInsensitive(device, {search:String}) > 0))`
+           or (positionCaseInsensitive(device, {search:String}) > 0)
+           or (
+             sd.data_key IN ('phone_number','email','caseId')
+             AND positionCaseInsensitive(sd.string_value, {search:String}) > 0
+           ))`
+    : '';
+  const searchJoinQuery = search
+    ? 'inner join session_data sd on website_event.session_id = sd.session_id'
     : '';
 
   let sql = '';
@@ -117,6 +124,7 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters) {
       lastAt as createdAt
     from website_event
     ${cohortQuery}
+    ${searchJoinQuery}
     where website_id = {websiteId:UUID}
     ${dateQuery}
     ${filterQuery}
@@ -146,6 +154,7 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters) {
       lastAt as createdAt
     from website_event_stats_hourly as website_event
     ${cohortQuery}
+    ${searchJoinQuery}
     where website_id = {websiteId:UUID}
     ${dateQuery}
     ${filterQuery}

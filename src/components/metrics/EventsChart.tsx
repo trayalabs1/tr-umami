@@ -1,3 +1,4 @@
+import { Column, Row } from '@umami/react-zen';
 import { colord } from 'colord';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart, type BarChartProps } from '@/components/charts/BarChart';
@@ -8,6 +9,7 @@ import {
   useTimezone,
   useWebsiteEventsSeriesQuery,
 } from '@/components/hooks';
+import { DownloadButton } from '@/components/input/DownloadButton';
 import { renderDateLabels } from '@/lib/charts';
 import { CHART_COLORS } from '@/lib/constants';
 import { generateTimeSeries } from '@/lib/date';
@@ -68,6 +70,21 @@ export function EventsChart({ websiteId, focusLabel, limit }: EventsChartProps) 
     }
   }, [data, startDate, endDate, unit, focusLabel]);
 
+  const csvData = useMemo(() => {
+    if (!chartData?.datasets?.length) return [];
+    const firstDataset = chartData.datasets[0];
+    if (!firstDataset?.data?.length) return [];
+    return firstDataset.data.map(({ x }: { x: string }, i: number) => {
+      const row: Record<string, any> = { time: x };
+      chartData.datasets.forEach((ds: any) => {
+        if (ds.label) {
+          row[ds.label] = ds.data[i]?.y ?? 0;
+        }
+      });
+      return row;
+    });
+  }, [chartData]);
+
   useEffect(() => {
     if (label !== focusLabel) {
       setLabel(focusLabel);
@@ -77,18 +94,23 @@ export function EventsChart({ websiteId, focusLabel, limit }: EventsChartProps) 
   const renderXLabel = useCallback(renderDateLabels(unit, locale), [unit, locale]);
 
   return (
-    <LoadingPanel isLoading={isLoading} error={error} minHeight="400px">
-      {chartData && (
-        <BarChart
-          chartData={chartData}
-          minDate={startDate}
-          maxDate={endDate}
-          unit={unit}
-          stacked={true}
-          renderXLabel={renderXLabel}
-          height="400px"
-        />
-      )}
-    </LoadingPanel>
+    <Column gap="2">
+      <Row justifyContent="flex-end">
+        <DownloadButton filename="events" data={csvData} />
+      </Row>
+      <LoadingPanel isLoading={isLoading} error={error} minHeight="400px">
+        {chartData && (
+          <BarChart
+            chartData={chartData}
+            minDate={startDate}
+            maxDate={endDate}
+            unit={unit}
+            stacked={true}
+            renderXLabel={renderXLabel}
+            height="400px"
+          />
+        )}
+      </LoadingPanel>
+    </Column>
   );
 }

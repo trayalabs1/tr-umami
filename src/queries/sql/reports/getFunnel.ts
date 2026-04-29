@@ -196,10 +196,6 @@ async function clickhouseQuery(
 ): Promise<Array<FunnelResult>> {
   const { startDate, endDate, window, steps } = parameters;
   const { rawQuery, parseFilters } = clickhouse;
-  const { levelOneQuery, levelQuery, sumQuery, stepFilterQuery, params } = getFunnelQuery(
-    steps,
-    window,
-  );
   const { filterQuery, cohortQuery, queryParams } = parseFilters({
     ...filters,
     websiteId,
@@ -211,7 +207,6 @@ async function clickhouseQuery(
     stepIndex: number,
     stepFilters: Array<FunnelStepFilter> | undefined,
     params: Record<string, string>,
-    eventAlias: string,
   ): string {
     if (!stepFilters?.length) return '';
 
@@ -233,7 +228,7 @@ async function clickhouseQuery(
         }
         params[valParam] = val;
 
-        return `and ${eventAlias}.event_id in (
+        return `and event_id in (
           select event_id from event_data
           where website_id = {websiteId:UUID}
             and created_at between {startDate:DateTime64} and {endDate:DateTime64}
@@ -241,104 +236,63 @@ async function clickhouseQuery(
             and multiIf(data_type = 2, replaceAll(string_value, '.0000', ''), string_value) ${op} {${valParam}:String}
         )`;
       })
-      .join('\n');
+      .join(' ');
   }
 
-  function getFunnelQuery(
-    steps: Array<FunnelStep>,
-    window: number,
-  ): {
-    levelOneQuery: string;
-    levelQuery: string;
-    sumQuery: string;
-    stepFilterQuery: string;
-    params: Record<string, string>;
-  } {
-    const extraParams: Record<string, string> = {};
+  const windowSeconds = window * 60;
+  const stepConditions: string[] = [];
+  const stepFilterParts: string[] = [];
+  const params: Record<string, string> = {};
 
-    const result = steps.reduce(
-      (pv, cv, i) => {
-        const levelNumber = i + 1;
-        const startSum = i > 0 ? 'union all ' : '';
-        const startFilter = i > 0 ? 'or' : '';
-        const isURL = cv.type === 'path';
-        const column = isURL ? 'url_path' : 'event_name';
+  steps.forEach((step, i) => {
+    const isURL = step.type === 'path';
+    const column = isURL ? 'url_path' : 'event_name';
 
-        let operator = '=';
-        let paramValue = cv.value;
+    let operator = '=';
+    let paramValue = step.value;
 
-        if (cv.value.startsWith('*') || cv.value.endsWith('*')) {
-          operator = 'like';
-          paramValue = cv.value.replace(/^\*|\*$/g, '%');
-        }
+    if (step.value.startsWith('*') || step.value.endsWith('*')) {
+      operator = 'like';
+      paramValue = step.value.replace(/^\*|\*$/g, '%');
+    }
 
-        const eventAlias = levelNumber === 1 ? 'level0' : 'y';
-        const eventDataClause =
-          !isURL && cv.filters?.length
-            ? buildEventDataFilters(i, cv.filters, extraParams, eventAlias)
-            : '';
+    const eventDataClause =
+      !isURL && step.filters?.length ? buildEventDataFilters(i, step.filters, params) : '';
 
-        if (levelNumber === 1) {
-          pv.levelOneQuery = `\n
-          level1 AS (
-            select *
-            from level0
-            where ${column} ${operator} {param${i}:String}
-            ${eventDataClause}
-          )`;
-        } else {
-          pv.levelQuery += `\n
-          , level${levelNumber} AS (
-            select distinct y.session_id as session_id,
-                y.url_path as url_path,
-                y.referrer_path as referrer_path,
-                y.event_name,
-                y.event_id,
-                y.created_at as created_at
-            from level${i} x
-            join level0 y
-            on x.session_id = y.session_id
-            where y.created_at between x.created_at and x.created_at + interval ${window} minute
-                and y.${column} ${operator} {param${i}:String}
-                ${eventDataClause}
-          )`;
-        }
+    const baseCond = `${column} ${operator} {param${i}:String}`;
+    const fullCond = eventDataClause
+      ? `(${baseCond} ${eventDataClause.replace(/^and /, 'and ')})`
+      : baseCond;
 
-        pv.sumQuery += `\n${startSum}select ${levelNumber} as level, count(distinct(session_id)) as count from level${levelNumber}`;
-        pv.stepFilterQuery += `${startFilter} ${column} ${operator} {param${i}:String} `;
-        pv.params[`param${i}`] = paramValue;
+    stepConditions.push(fullCond);
+    stepFilterParts.push(baseCond);
+    params[`param${i}`] = paramValue;
+  });
 
-        return pv;
-      },
-      {
-        levelOneQuery: '',
-        levelQuery: '',
-        sumQuery: '',
-        stepFilterQuery: '',
-        params: {} as Record<string, string>,
-      },
-    );
-
-    return { ...result, params: { ...result.params, ...extraParams } };
-  }
+  const conditionsSQL = stepConditions.join(', ');
+  const stepFilterQuery = stepFilterParts.join(' or ');
 
   return rawQuery(
     `
-    WITH level0 AS (
-      select distinct event_id, session_id, url_path, referrer_path, event_name, created_at
-      from website_event
-      ${cohortQuery}
-      where (${stepFilterQuery})
-        and website_id = {websiteId:UUID}
-        and created_at between {startDate:DateTime64} and {endDate:DateTime64}
-       ${filterQuery}
-    ),
-    ${levelOneQuery}
-    ${levelQuery}
-    select *
-    from (
-      ${sumQuery}
-    ) ORDER BY level;
+    SELECT
+        level,
+        count() AS count
+    FROM (
+        SELECT
+            session_id,
+            windowFunnel(${windowSeconds})(created_at, ${conditionsSQL}) AS max_level
+        FROM website_event
+        ${cohortQuery}
+        WHERE website_id = {websiteId:UUID}
+          AND created_at BETWEEN {startDate:DateTime64} AND {endDate:DateTime64}
+          AND (${stepFilterQuery})
+          ${filterQuery}
+        GROUP BY session_id
+        HAVING max_level > 0
+    )
+    ARRAY JOIN arrayMap(i -> i + 1, range(max_level)) AS level
+    GROUP BY level
+    ORDER BY level ASC;
     `,
     {
       ...params,
@@ -353,7 +307,8 @@ const formatResults = (steps: Array<FunnelStep>) => (results: unknown) => {
     const previous = Number(results[i - 1]?.count) || 0;
     const dropped = previous > 0 ? previous - visitors : 0;
     const dropoff = 1 - visitors / previous;
-    const remaining = visitors / Number(results[0].count);
+    const firstCount = Number(results[0]?.count) || 0;
+    const remaining = firstCount > 0 ? visitors / firstCount : 0;
 
     return {
       ...step,
