@@ -1,11 +1,11 @@
-import { startOfHour, startOfMonth } from 'date-fns';
+import { startOfHour } from 'date-fns';
 import debug from 'debug';
 import { isbot } from 'isbot';
 import { serializeError } from 'serialize-error';
 import { z } from 'zod';
 import clickhouse from '@/lib/clickhouse';
 import { COLLECTION_TYPE, EVENT_TYPE } from '@/lib/constants';
-import { hash, secret, uuid } from '@/lib/crypto';
+import { getSalt, hash, secret, uuid } from '@/lib/crypto';
 import { getClientInfo, hasBlockedIp } from '@/lib/detect';
 import { createToken, parseToken } from '@/lib/jwt';
 import { fetchWebsite } from '@/lib/load';
@@ -25,7 +25,7 @@ interface Cache {
 }
 
 const schema = z.object({
-  type: z.enum(['event', 'identify']),
+  type: z.enum(['event', 'identify', 'performance']),
   payload: z
     .object({
       website: z.uuid().optional(),
@@ -51,6 +51,11 @@ const schema = z.object({
       deviceBrand: z.string().max(50).optional(),
       osVersion: z.string().max(50).optional(),
       appVersion: z.string().max(50).optional(),
+      lcp: z.number().nonnegative().max(60000).optional(),
+      inp: z.number().nonnegative().max(60000).optional(),
+      cls: z.number().nonnegative().max(100).optional(),
+      fcp: z.number().nonnegative().max(60000).optional(),
+      ttfb: z.number().nonnegative().max(60000).optional(),
     })
     .refine(
       data => {
@@ -99,6 +104,11 @@ export async function POST(request: Request) {
       deviceBrand,
       osVersion,
       appVersion,
+      lcp,
+      inp,
+      cls,
+      fcp,
+      ttfb,
     } = payload;
 
     const sourceId = websiteId || pixelId || linkId;
@@ -154,7 +164,8 @@ export async function POST(request: Request) {
     const createdAt = timestamp ? new Date(timestamp * 1000) : new Date();
     const now = Math.floor(Date.now() / 1000);
 
-    const sessionSalt = hash(startOfMonth(createdAt).toUTCString());
+    const saltRotation = process.env.SALT_ROTATION || 'month';
+    const sessionSalt = getSalt(saltRotation, createdAt);
     const visitSalt = hash(startOfHour(createdAt).toUTCString());
 
     const sessionId = id ? uuid(sourceId, id) : uuid(sourceId, ip, userAgent, sessionSalt);
@@ -187,7 +198,7 @@ export async function POST(request: Request) {
       iat = now;
     }
 
-    const eventDataCollector = (eventName = name) => {
+    const eventDataCollector = async (eventName = name) => {
       const base = hostname ? `https://${hostname}` : 'https://localhost';
       const currentUrl = new URL(url, base);
 
@@ -263,7 +274,7 @@ export async function POST(request: Request) {
         city,
 
         // Events
-        eventName: eventName,
+        eventName,
         eventData: data,
         tag,
 
@@ -291,10 +302,8 @@ export async function POST(request: Request) {
     };
 
     if (type === COLLECTION_TYPE.event) {
-      eventDataCollector();
-    }
-
-    if (type === COLLECTION_TYPE.identify) {
+      await eventDataCollector();
+    } else if (type === COLLECTION_TYPE.identify) {
       if (data) {
         saveSessionData({
           websiteId,
@@ -303,15 +312,41 @@ export async function POST(request: Request) {
           distinctId: id,
           createdAt,
         });
-        eventDataCollector(`profile_identified`);
+        await eventDataCollector('profile_identified');
       }
+    } else if (type === COLLECTION_TYPE.performance) {
+      const base = hostname ? `https://${hostname}` : 'https://localhost';
+      const currentUrl = new URL(url, base);
+      const urlPath = currentUrl.pathname === '/undefined' ? '' : currentUrl.pathname;
+
+      await saveEvent({
+        websiteId: sourceId,
+        sessionId,
+        visitId,
+        urlPath,
+        pageTitle: safeDecodeURIComponent(title),
+        eventType: EVENT_TYPE.performance,
+        browser,
+        os,
+        device,
+        screen,
+        language,
+        country,
+        region,
+        city,
+        lcp,
+        inp,
+        cls,
+        fcp,
+        ttfb,
+        createdAt,
+      });
     }
 
     const token = createToken({ websiteId, sessionId, visitId, iat }, secret());
 
     timings.total = Date.now() - startTime;
 
-    // Log performance metrics
     log('[PERFORMANCE]', {
       type,
       cached: !!cache,

@@ -1,5 +1,5 @@
 import type * as tls from 'node:tls';
-import { Kafka, logLevel, type Producer, type SASLOptions } from 'kafkajs';
+import { CompressionTypes, Kafka, logLevel, type Producer, type SASLOptions } from 'kafkajs';
 import { serializeError } from 'serialize-error';
 import { BatchBuffer } from '@/lib/batch-buffer';
 import { KAFKA, KAFKA_PRODUCER } from '@/lib/db';
@@ -117,6 +117,7 @@ async function flushBatch(messages: KafkaMessage[]): Promise<void> {
         messages: msgs,
         acks: ACKS,
         timeout: SEND_TIMEOUT,
+        compression: CompressionTypes.GZIP,
       }),
     ),
   );
