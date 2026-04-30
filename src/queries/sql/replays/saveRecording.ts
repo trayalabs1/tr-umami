@@ -63,21 +63,33 @@ async function clickhouseQuery({
   const { insert, getUTCString } = clickhouse;
   const { sendMessage } = kafka;
 
-  const message = {
+  const baseMessage = {
     replay_id: uuid(),
     website_id: websiteId,
     session_id: sessionId,
     visit_id: visitId,
     chunk_index: chunkIndex,
-    events: JSON.stringify(events),
     event_count: eventCount,
     started_at: getUTCString(startedAt),
     ended_at: getUTCString(endedAt),
   };
 
   if (kafka.enabled) {
-    return sendMessage('session_replay', message);
+    // gzip+base64 events to keep Kafka message under broker per-message limit.
+    // Consumer must un-gzip before inserting into ClickHouse.
+    const compressed = gzipSync(Buffer.from(JSON.stringify(events), 'utf-8')).toString('base64');
+
+    return sendMessage('session_replay', {
+      ...baseMessage,
+      events: compressed,
+      encoding: 'gzip',
+    });
   }
 
-  return insert('session_replay', [message]);
+  return insert('session_replay', [
+    {
+      ...baseMessage,
+      events: JSON.stringify(events),
+    },
+  ]);
 }
