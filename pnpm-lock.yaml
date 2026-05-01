@@ -105,8 +105,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
       is-localhost-ip:
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: ^2.0.0
+        version: 2.0.0
       isbot:
         specifier: ^5.1.37
         version: 5.1.37
@@ -3679,9 +3679,9 @@ packages:
     resolution: {integrity: sha512-iwGqO3J21aaSkC7jWnHP/difazwS7SFeIqxv6wEtLU8Y5KlzFTjyqcSIT0d8s4+dDhKytsk9PJZ2BkS5eZwQRQ==}
     engines: {node: '>=10'}
 
-  is-localhost-ip@3.0.0:
-    resolution: {integrity: sha512-vZcj7faE8DpD4p7254ULm6vzNjhtAFNIvhN9pcy3vVf84UziC/o3AFImoi1rVTKPVX4Iajqo2X57TZvDBgScaw==}
-    engines: {node: '>=18'}
+  is-localhost-ip@2.0.0:
+    resolution: {integrity: sha512-vlgs2cSgMOfnKU8c1ewgKPyum9rVrjjLLW2HBdL5i0iAJjOs8NY55ZBd/hqUTaYR0EO9CKZd3hVSC2HlIbygTQ==}
+    engines: {node: '>=12'}
 
   is-map@2.0.3:
     resolution: {integrity: sha512-1Qed0/Hr2m+YqxnM09CjA2d/i6YZNfF6R2oRAOj36eUdS6qIV/huPJNSEpKbupewFs+ZsJlxsjjPbc0/afW6Lw==}
@@ -9578,7 +9578,7 @@ snapshots:
       global-dirs: 3.0.1
       is-path-inside: 3.0.3
 
-  is-localhost-ip@3.0.0: {}
+  is-localhost-ip@2.0.0: {}
 
   is-map@2.0.3: {}
 
