@@ -73,8 +73,10 @@ export class BatchBuffer<T> {
       logger(`[${this.options.name}] Flushed ${batch.length} items`);
     } catch (error) {
       this.droppedCount += batch.length;
+      // KAFKA_PRODUCER_DROP is a stable marker for alert rules (e.g. grep/log-based alerts).
+      // logger.error bypasses the debug namespace gate — always emitted regardless of DEBUG env.
       logger.error(
-        `[${this.options.name}] Flush failed, DROPPED ${batch.length} messages ` +
+        `[KAFKA_PRODUCER_DROP] [${this.options.name}] Flush failed, dropped ${batch.length} messages ` +
           `(total dropped: ${this.droppedCount}): ${(error as Error).message}`,
       );
       // Do NOT re-queue — re-queuing on a rejected send caused duplicate inserts.
