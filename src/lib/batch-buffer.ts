@@ -15,6 +15,7 @@ export class BatchBuffer<T> {
   private flushTimer: NodeJS.Timeout | null = null;
   private isShuttingDown = false;
   private isFlushInProgress = false;
+  private droppedCount = 0;
   private readonly options: BatchBufferOptions<T>;
 
   constructor(options: BatchBufferOptions<T>) {
@@ -36,27 +37,22 @@ export class BatchBuffer<T> {
     );
   }
 
-  add(item: T): void {
+  async add(item: T): Promise<void> {
     if (this.isShuttingDown) {
       logger.warn(`[${this.options.name}] Received item during shutdown, skipping`);
       return;
     }
 
-    this.buffer.push(item);
-
-    // Trigger immediate flush if batch size reached
-    if (this.buffer.length >= this.options.batchSize && !this.isFlushInProgress) {
-      // Fire and forget - don't await so messages can keep arriving during flush
-      this.flush().catch(error => {
-        logger.error(`[${this.options.name}] Flush failed: ${error.message}`);
-      });
+    // Backpressure: wait while buffer is full (caller is fire-and-forget, safe to await).
+    while (this.buffer.length >= this.options.maxBufferSize && !this.isShuttingDown) {
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    // Force flush if buffer exceeds max size (prevents unbounded growth)
-    if (this.buffer.length >= this.options.maxBufferSize && !this.isFlushInProgress) {
-      logger(`[${this.options.name}] Buffer full (${this.buffer.length}), forcing immediate flush`);
+    this.buffer.push(item);
+
+    if (this.buffer.length >= this.options.batchSize && !this.isFlushInProgress) {
       this.flush().catch(error => {
-        logger.error(`[${this.options.name}] Force flush failed: ${error.message}`);
+        logger.error(`[${this.options.name}] Flush failed: ${error.message}`);
       });
     }
   }
@@ -76,12 +72,16 @@ export class BatchBuffer<T> {
       await this.options.onFlush(batch);
       logger(`[${this.options.name}] Flushed ${batch.length} items`);
     } catch (error) {
-      logger.error(`[${this.options.name}] Failed to flush batch: ${(error as Error).message}`);
-      // Re-add items to buffer for retry (prepend failed batch)
-      this.buffer.unshift(...batch);
+      this.droppedCount += batch.length;
+      // KAFKA_PRODUCER_DROP is a stable marker for alert rules (e.g. grep/log-based alerts).
+      // logger.error bypasses the debug namespace gate — always emitted regardless of DEBUG env.
+      logger.error(
+        `[KAFKA_PRODUCER_DROP] [${this.options.name}] Flush failed, dropped ${batch.length} messages ` +
+          `(total dropped: ${this.droppedCount}): ${(error as Error).message}`,
+      );
+      // Do NOT re-queue — re-queuing on a rejected send caused duplicate inserts.
       throw error;
     } finally {
-      // Release lock
       this.isFlushInProgress = false;
     }
   }
@@ -109,6 +109,10 @@ export class BatchBuffer<T> {
 
   getBufferSize(): number {
     return this.buffer.length;
+  }
+
+  getDroppedCount(): number {
+    return this.droppedCount;
   }
 
   private startFlushTimer(): void {

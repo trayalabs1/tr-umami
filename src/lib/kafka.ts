@@ -10,11 +10,10 @@ const logger = createLogger('kafka');
 
 // Configuration from environment variables
 const BATCH_WINDOW_MS = parseInt(process.env.KAFKA_BATCH_WINDOW_MS || '10', 10);
-const MAX_QUEUE_SIZE = parseInt(process.env.KAFKA_MAX_QUEUE_SIZE || '500', 10);
+const MAX_QUEUE_SIZE = parseInt(process.env.KAFKA_MAX_QUEUE_SIZE || '5000', 10);
 const BATCH_SIZE = Math.floor(MAX_QUEUE_SIZE * 0.8); // Flush at 80% capacity
 const CONNECT_TIMEOUT = parseInt(process.env.KAFKA_CONNECT_TIMEOUT || '10000', 10);
 const SEND_TIMEOUT = parseInt(process.env.KAFKA_SEND_TIMEOUT || '30000', 10);
-const ACKS = 1;
 
 let kafka: Kafka;
 let producer: Producer;
@@ -68,7 +67,10 @@ function getClient() {
 }
 
 async function getProducer(): Promise<Producer> {
-  const producer = kafka.producer();
+  const producer = kafka.producer({
+    idempotent: true, // dedupe library-level retries; forces acks=-1
+    maxInFlightRequests: 1, // required by idempotent producer
+  });
   await producer.connect();
 
   if (process.env.NODE_ENV !== 'production') {
@@ -115,7 +117,6 @@ async function flushBatch(messages: KafkaMessage[]): Promise<void> {
       producer.send({
         topic,
         messages: msgs,
-        acks: ACKS,
         timeout: SEND_TIMEOUT,
         compression: CompressionTypes.GZIP,
       }),
@@ -156,9 +157,8 @@ async function sendMessage(
 
   const messages = Array.isArray(message) ? message : [message];
 
-  // Add each message to the batch buffer (synchronous, non-blocking)
   for (const msg of messages) {
-    batchBuffer.add({
+    await batchBuffer.add({
       topic,
       value: JSON.stringify(msg),
       timestamp: Date.now().toString(),
@@ -208,6 +208,7 @@ export async function gracefulShutdown(): Promise<void> {
 export function getMetrics() {
   return {
     bufferSize: batchBuffer?.getBufferSize() || 0,
+    droppedCount: batchBuffer?.getDroppedCount() || 0,
     maxBufferSize: MAX_QUEUE_SIZE,
     batchSize: BATCH_SIZE,
     batchWindowMs: BATCH_WINDOW_MS,
