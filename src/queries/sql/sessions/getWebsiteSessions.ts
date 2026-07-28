@@ -48,6 +48,7 @@ async function relationalQuery(websiteId: string, filters: QueryFilters) {
       max(website_event.created_at) as "lastAt",
       count(distinct website_event.visit_id) as "visits",
       sum(case when website_event.event_type = 1 then 1 else 0 end) as "views",
+      sum(case when website_event.event_type = 2 then 1 else 0 end) as "events",
       max(website_event.created_at) as "createdAt"
     from website_event 
     ${cohortQuery}
@@ -89,11 +90,14 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters) {
            or (positionCaseInsensitive(city, {search:String}) > 0)
            or (positionCaseInsensitive(browser, {search:String}) > 0)
            or (positionCaseInsensitive(os, {search:String}) > 0)
-           or (positionCaseInsensitive(device, {search:String}) > 0))
+           or (positionCaseInsensitive(device, {search:String}) > 0)
            or (
-            sd.data_key IN ('phone_number','email','caseId')
-            AND positionCaseInsensitive(sd.string_value, {search:String}) > 0
-          )`
+             sd.data_key IN ('phone_number','email','caseId')
+             AND positionCaseInsensitive(sd.string_value, {search:String}) > 0
+           ))`
+    : '';
+  const searchJoinQuery = search
+    ? 'inner join session_data sd on website_event.session_id = sd.session_id'
     : '';
 
   let sql = '';
@@ -116,11 +120,11 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters) {
       ${getDateStringSQL('max(created_at)')} as lastAt,
       uniq(visit_id) as visits,
       sumIf(1, event_type = 1) as views,
+      sumIf(1, event_type = 2) as events,
       lastAt as createdAt
     from website_event
     ${cohortQuery}
-    left join session_data sd 
-      on website_event.session_id = sd.session_id
+    ${searchJoinQuery}
     where website_id = {websiteId:UUID}
     ${dateQuery}
     ${filterQuery}
@@ -146,11 +150,11 @@ async function clickhouseQuery(websiteId: string, filters: QueryFilters) {
       ${getDateStringSQL('max(max_time)')} as lastAt,
       uniq(visit_id) as visits,
       sumIf(views, event_type = 1) as views,
+      sum(length(event_name)) as events,
       lastAt as createdAt
     from website_event_stats_hourly as website_event
-    left join session_data sd 
-      on website_event.session_id = sd.session_id
     ${cohortQuery}
+    ${searchJoinQuery}
     where website_id = {websiteId:UUID}
     ${dateQuery}
     ${filterQuery}

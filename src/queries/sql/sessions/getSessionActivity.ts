@@ -29,6 +29,7 @@ async function relationalQuery(websiteId: string, sessionId: string, filters: Qu
       event_type as "eventType",
       event_name as "eventName",
       visit_id as "visitId",
+      hostname,
       event_id IN (select website_event_id 
                    from event_data
                    where website_id = {{websiteId::uuid}}
@@ -74,6 +75,7 @@ async function clickhouseQuery(websiteId: string, sessionId: string, filters: Qu
         we.event_type AS eventType,
         we.event_name AS eventName,
         we.visit_id AS visitId,
+        we.hostname AS hostname,
         we.event_id IN (SELECT event_id FROM filtered_event_ids) AS hasData,
         groupArray(
         (
@@ -99,7 +101,8 @@ async function clickhouseQuery(websiteId: string, sessionId: string, filters: Qu
         we.event_id,
         we.event_type,
         we.event_name,
-        we.visit_id
+        we.visit_id,
+        we.hostname
     ORDER BY createdAt DESC
     LIMIT 500
     `,

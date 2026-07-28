@@ -37,7 +37,6 @@ export async function GET(
       dateValue,
     })),
   }));
-  // const profileIdentifyEventIds: string[] = [];
   for (const event of parsedData) {
     if (event.eventName === 'profile_identified') {
       const caseId = event.eventData.find(data => data.dataKey === 'caseId')?.stringValue;
