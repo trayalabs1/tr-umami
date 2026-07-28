@@ -41,6 +41,12 @@ FROM node:${NODE_IMAGE_VERSION} AS runner
 WORKDIR /app
 
 ARG PRISMA_VERSION="7.3.0"
+# Must match the version pnpm-lock.yaml resolves for the app, so this install and
+# the Next standalone output below share one node_modules/.pnpm/semver@<v> directory
+# and merge. On a mismatch the standalone COPY replaces this complete copy with its
+# own partially traced one (the app imports only semver submodules, so index.js is
+# absent) and scripts/check-db.js dies on `import semver from 'semver'`.
+ARG SEMVER_VERSION="7.7.4"
 ARG NODE_OPTIONS
 
 ENV NODE_ENV=production
@@ -62,10 +68,14 @@ RUN set -x \
 #      has no package.json, so a minimal one is seeded first. Without it the
 #      schema-engine binary is never baked in and `prisma migrate deploy` (run by
 #      scripts/check-db.js on container start) has to download it at runtime.
-# Both files are replaced later by the standalone build output COPY below.
+# verifyDepsBeforeRun: false is what upstream umami sets here too. Without it pnpm 11
+# defaults to "install" and auto-runs `pnpm install` before any `pnpm run`, which
+# fails EACCES as the unprivileged nextjs user and crashloops the container. The
+# workspace file is deliberately kept in the image for that reason.
+# package.json is replaced later by the standalone build output COPY below.
 RUN printf '{"name":"umami-runner","version":"0.0.0","private":true}' > package.json \
-    && printf "allowBuilds:\n  '@prisma/client': true\n  '@prisma/engines': true\n  prisma: true\n" > pnpm-workspace.yaml
-RUN pnpm add npm-run-all dotenv chalk semver \
+    && printf "allowBuilds:\n  '@prisma/client': true\n  '@prisma/engines': true\n  prisma: true\nverifyDepsBeforeRun: false\n" > pnpm-workspace.yaml
+RUN pnpm add npm-run-all dotenv chalk semver@${SEMVER_VERSION} \
     prisma@${PRISMA_VERSION} \
     @prisma/client@${PRISMA_VERSION} \
     @prisma/adapter-pg@${PRISMA_VERSION}
@@ -88,4 +98,6 @@ EXPOSE 3000
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-CMD ["pnpm", "start-docker"]
+# npm, not pnpm — same as upstream umami. Combined with verifyDepsBeforeRun: false
+# above, this keeps pnpm's dependency-state check out of container startup.
+CMD ["npm", "run", "start-docker"]
