@@ -5,7 +5,7 @@ FROM node:${NODE_IMAGE_VERSION} AS deps
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN npm install -g pnpm
 RUN pnpm install --frozen-lockfile
 
@@ -54,7 +54,18 @@ RUN set -x \
     && npm install -g pnpm
 
 # Script dependencies
-RUN pnpm --allow-build='@prisma/engines' add npm-run-all dotenv chalk semver \
+# Two things are required for the Prisma engines postinstall to actually run here:
+#   1. pnpm 11 refuses to run dependency build scripts unless they are allow-listed
+#      in pnpm-workspace.yaml (allowBuilds), else the install dies with
+#      ERR_PNPM_IGNORED_BUILDS.
+#   2. pnpm silently SKIPS all dependency build scripts when the install directory
+#      has no package.json, so a minimal one is seeded first. Without it the
+#      schema-engine binary is never baked in and `prisma migrate deploy` (run by
+#      scripts/check-db.js on container start) has to download it at runtime.
+# Both files are replaced later by the standalone build output COPY below.
+RUN printf '{"name":"umami-runner","version":"0.0.0","private":true}' > package.json \
+    && printf "allowBuilds:\n  '@prisma/client': true\n  '@prisma/engines': true\n  prisma: true\n" > pnpm-workspace.yaml
+RUN pnpm add npm-run-all dotenv chalk semver \
     prisma@${PRISMA_VERSION} \
     @prisma/client@${PRISMA_VERSION} \
     @prisma/adapter-pg@${PRISMA_VERSION}
