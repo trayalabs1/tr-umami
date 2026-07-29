@@ -2,11 +2,16 @@ packages:
   - '**'
   - '!dist'
   - '!**/dist/**'
+# pnpm 11 removed onlyBuiltDependencies / ignoredBuiltDependencies in favour of
+# allowBuilds (package -> bool). Any dependency with a build script that is not
+# listed here fails the install with ERR_PNPM_IGNORED_BUILDS, so all of them
+# must be declared explicitly. https://pnpm.io/settings#allowbuilds
 allowBuilds:
-  '@parcel/watcher': false
+  '@prisma/client': true
   '@prisma/engines': true
+  prisma: true
+  '@parcel/watcher': false
   '@swc/core': false
   esbuild: false
   msw: false
-  prisma: true
   sharp: false

@@ -15,7 +15,8 @@ const BATCH_SIZE = Math.floor(MAX_QUEUE_SIZE * 0.8); // Flush at 80% capacity
 const CONNECT_TIMEOUT = parseInt(process.env.KAFKA_CONNECT_TIMEOUT || '10000', 10);
 const SEND_TIMEOUT = parseInt(process.env.KAFKA_SEND_TIMEOUT || '30000', 10);
 const ACKS = 1;
-const DEFAULT_MAX_MESSAGE_BYTES = 900_000;
+// Broker's message.max.bytes is 1048588; keep a margin for batch/protocol overhead.
+const MAX_BATCH_BYTES = parseInt(process.env.KAFKA_MAX_BATCH_BYTES || '943729', 10);
 
 let kafka: Kafka;
 let producer: Producer;
@@ -32,41 +33,6 @@ type KafkaProducerMessage = { value: string; timestamp: string };
 
 // Batch buffer instance
 let batchBuffer: BatchBuffer<KafkaMessage> | null = null;
-
-function getMaxMessageBytes() {
-  const size = Number(process.env.KAFKA_MAX_MESSAGE_BYTES);
-
-  return Number.isFinite(size) && size > 0 ? size : DEFAULT_MAX_MESSAGE_BYTES;
-}
-
-function getMessageSize(value: string) {
-  return Buffer.byteLength(value, 'utf8');
-}
-
-function chunkBySize(messages: KafkaProducerMessage[], maxMessageBytes: number) {
-  const chunks: KafkaProducerMessage[][] = [];
-  let chunk: KafkaProducerMessage[] = [];
-  let chunkSize = 0;
-
-  for (const message of messages) {
-    const size = getMessageSize(message.value);
-
-    if (chunk.length && chunkSize + size > maxMessageBytes) {
-      chunks.push(chunk);
-      chunk = [];
-      chunkSize = 0;
-    }
-
-    chunk.push(message);
-    chunkSize += size;
-  }
-
-  if (chunk.length) {
-    chunks.push(chunk);
-  }
-
-  return chunks;
-}
 
 function getClient() {
   const { username, password } = new URL(process.env.KAFKA_URL);
@@ -121,6 +87,80 @@ async function getProducer(): Promise<Producer> {
 }
 
 /**
+ * Split messages into chunks that stay under MAX_BATCH_BYTES
+ */
+function chunkByByteSize(
+  msgs: Array<{ value: string; timestamp: string }>,
+): Array<Array<{ value: string; timestamp: string }>> {
+  const chunks: Array<Array<{ value: string; timestamp: string }>> = [];
+  let current: Array<{ value: string; timestamp: string }> = [];
+  let currentBytes = 0;
+
+  for (const msg of msgs) {
+    const msgBytes = Buffer.byteLength(msg.value, 'utf8');
+
+    if (current.length > 0 && currentBytes + msgBytes > MAX_BATCH_BYTES) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+
+    current.push(msg);
+    currentBytes += msgBytes;
+  }
+
+  if (current.length > 0) {
+    chunks.push(current);
+  }
+
+  return chunks;
+}
+
+const NON_RETRIABLE_SIZE_ERRORS = new Set(['MESSAGE_TOO_LARGE', 'RECORD_LIST_TOO_LARGE']);
+
+function isMessageTooLargeError(error: unknown): boolean {
+  const type = (error as { type?: string; cause?: { type?: string } })?.type;
+  const causeType = (error as { cause?: { type?: string } })?.cause?.type;
+
+  return NON_RETRIABLE_SIZE_ERRORS.has(type) || NON_RETRIABLE_SIZE_ERRORS.has(causeType);
+}
+
+/**
+ * Send a chunk, bisecting and dropping only the oversized message(s) if the
+ * broker permanently rejects it for size — prevents a poison message from
+ * blocking the batch buffer forever (everything else keeps flowing).
+ */
+async function sendChunkSafely(
+  topic: string,
+  chunk: Array<{ value: string; timestamp: string }>,
+): Promise<void> {
+  try {
+    await producer.send({
+      topic,
+      messages: chunk,
+      acks: ACKS,
+      timeout: SEND_TIMEOUT,
+      compression: CompressionTypes.GZIP,
+    });
+  } catch (error) {
+    if (!isMessageTooLargeError(error)) {
+      throw error;
+    }
+
+    if (chunk.length === 1) {
+      logger.error(
+        `Dropping oversized message on topic "${topic}" (${Buffer.byteLength(chunk[0].value, 'utf8')} bytes, exceeds broker limit)`,
+      );
+      return;
+    }
+
+    const mid = Math.floor(chunk.length / 2);
+    await sendChunkSafely(topic, chunk.slice(0, mid));
+    await sendChunkSafely(topic, chunk.slice(mid));
+  }
+}
+
+/**
  * Flush handler called by BatchBuffer when it's time to send messages
  */
 async function flushBatch(messages: KafkaMessage[]): Promise<void> {
@@ -147,22 +187,11 @@ async function flushBatch(messages: KafkaMessage[]): Promise<void> {
     await sleep(500);
   }
 
-  const maxMessageBytes = getMaxMessageBytes();
-
-  // Send all topics in parallel
+  // Send all topics in parallel, chunked to stay under the broker's max message size
   await Promise.all(
-    Object.entries(topicGroups).map(async ([topic, msgs]) => {
-      // Split into chunks that stay under the broker's max message size
-      for (const chunk of chunkBySize(msgs, maxMessageBytes)) {
-        await producer.send({
-          topic,
-          messages: chunk,
-          acks: ACKS,
-          timeout: SEND_TIMEOUT,
-          compression: CompressionTypes.GZIP,
-        });
-      }
-    }),
+    Object.entries(topicGroups).flatMap(([topic, msgs]) =>
+      chunkByByteSize(msgs).map(chunk => sendChunkSafely(topic, chunk)),
+    ),
   );
 
   logger(`Flushed ${messages.length} messages across ${Object.keys(topicGroups).length} topics`);
@@ -198,16 +227,18 @@ async function sendMessage(
   }
 
   const messages = Array.isArray(message) ? message : [message];
-  const maxMessageBytes = getMaxMessageBytes();
 
   // Add each message to the batch buffer (synchronous, non-blocking)
   for (const msg of messages) {
     const value = JSON.stringify(msg);
-    const size = getMessageSize(value);
+    const size = Buffer.byteLength(value, 'utf8');
 
-    // Oversized messages can never be delivered - drop instead of poisoning the batch
-    if (size > maxMessageBytes) {
-      logger(`Kafka message dropped: topic=${topic} size=${size} max=${maxMessageBytes}`);
+    // A single message over the broker limit can never be delivered - drop it here
+    // instead of paying a rejected send + bisect in sendChunkSafely.
+    if (size > MAX_BATCH_BYTES) {
+      logger.error(
+        `Dropping oversized message on topic "${topic}" (${size} bytes, exceeds ${MAX_BATCH_BYTES})`,
+      );
       continue;
     }
 
