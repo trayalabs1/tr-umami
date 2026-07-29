@@ -1,10 +1,15 @@
 packages:
   - '**'
-ignoredBuiltDependencies:
-  - cypress
-  - esbuild
-  - sharp
-onlyBuiltDependencies:
-  - '@prisma/client'
-  - '@prisma/engines'
-  - prisma
+# pnpm 11 removed onlyBuiltDependencies / ignoredBuiltDependencies in favour of
+# allowBuilds (package -> bool). Any dependency with a build script that is not
+# listed here fails the install with ERR_PNPM_IGNORED_BUILDS, so all of them
+# must be declared explicitly. https://pnpm.io/settings#allowbuilds
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  '@parcel/watcher': false
+  '@swc/core': false
+  cypress: false
+  esbuild: false
+  sharp: false
