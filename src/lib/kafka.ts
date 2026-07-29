@@ -15,6 +15,7 @@ const BATCH_SIZE = Math.floor(MAX_QUEUE_SIZE * 0.8); // Flush at 80% capacity
 const CONNECT_TIMEOUT = parseInt(process.env.KAFKA_CONNECT_TIMEOUT || '10000', 10);
 const SEND_TIMEOUT = parseInt(process.env.KAFKA_SEND_TIMEOUT || '30000', 10);
 const ACKS = 1;
+const DEFAULT_MAX_MESSAGE_BYTES = 900_000;
 
 let kafka: Kafka;
 let producer: Producer;
@@ -27,8 +28,45 @@ interface KafkaMessage {
   timestamp: string;
 }
 
+type KafkaProducerMessage = { value: string; timestamp: string };
+
 // Batch buffer instance
 let batchBuffer: BatchBuffer<KafkaMessage> | null = null;
+
+function getMaxMessageBytes() {
+  const size = Number(process.env.KAFKA_MAX_MESSAGE_BYTES);
+
+  return Number.isFinite(size) && size > 0 ? size : DEFAULT_MAX_MESSAGE_BYTES;
+}
+
+function getMessageSize(value: string) {
+  return Buffer.byteLength(value, 'utf8');
+}
+
+function chunkBySize(messages: KafkaProducerMessage[], maxMessageBytes: number) {
+  const chunks: KafkaProducerMessage[][] = [];
+  let chunk: KafkaProducerMessage[] = [];
+  let chunkSize = 0;
+
+  for (const message of messages) {
+    const size = getMessageSize(message.value);
+
+    if (chunk.length && chunkSize + size > maxMessageBytes) {
+      chunks.push(chunk);
+      chunk = [];
+      chunkSize = 0;
+    }
+
+    chunk.push(message);
+    chunkSize += size;
+  }
+
+  if (chunk.length) {
+    chunks.push(chunk);
+  }
+
+  return chunks;
+}
 
 function getClient() {
   const { username, password } = new URL(process.env.KAFKA_URL);
@@ -100,7 +138,7 @@ async function flushBatch(messages: KafkaMessage[]): Promise<void> {
       });
       return acc;
     },
-    {} as Record<string, Array<{ value: string; timestamp: string }>>,
+    {} as Record<string, KafkaProducerMessage[]>,
   );
 
   await connect();
@@ -109,17 +147,22 @@ async function flushBatch(messages: KafkaMessage[]): Promise<void> {
     await sleep(500);
   }
 
+  const maxMessageBytes = getMaxMessageBytes();
+
   // Send all topics in parallel
   await Promise.all(
-    Object.entries(topicGroups).map(([topic, msgs]) =>
-      producer.send({
-        topic,
-        messages: msgs,
-        acks: ACKS,
-        timeout: SEND_TIMEOUT,
-        compression: CompressionTypes.GZIP,
-      }),
-    ),
+    Object.entries(topicGroups).map(async ([topic, msgs]) => {
+      // Split into chunks that stay under the broker's max message size
+      for (const chunk of chunkBySize(msgs, maxMessageBytes)) {
+        await producer.send({
+          topic,
+          messages: chunk,
+          acks: ACKS,
+          timeout: SEND_TIMEOUT,
+          compression: CompressionTypes.GZIP,
+        });
+      }
+    }),
   );
 
   logger(`Flushed ${messages.length} messages across ${Object.keys(topicGroups).length} topics`);
@@ -155,12 +198,22 @@ async function sendMessage(
   }
 
   const messages = Array.isArray(message) ? message : [message];
+  const maxMessageBytes = getMaxMessageBytes();
 
   // Add each message to the batch buffer (synchronous, non-blocking)
   for (const msg of messages) {
+    const value = JSON.stringify(msg);
+    const size = getMessageSize(value);
+
+    // Oversized messages can never be delivered - drop instead of poisoning the batch
+    if (size > maxMessageBytes) {
+      logger(`Kafka message dropped: topic=${topic} size=${size} max=${maxMessageBytes}`);
+      continue;
+    }
+
     batchBuffer.add({
       topic,
-      value: JSON.stringify(msg),
+      value,
       timestamp: Date.now().toString(),
     });
   }
