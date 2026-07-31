@@ -29,6 +29,8 @@ interface KafkaMessage {
   timestamp: string;
 }
 
+type KafkaProducerMessage = { value: string; timestamp: string };
+
 // Batch buffer instance
 let batchBuffer: BatchBuffer<KafkaMessage> | null = null;
 
@@ -176,7 +178,7 @@ async function flushBatch(messages: KafkaMessage[]): Promise<void> {
       });
       return acc;
     },
-    {} as Record<string, Array<{ value: string; timestamp: string }>>,
+    {} as Record<string, KafkaProducerMessage[]>,
   );
 
   await connect();
@@ -228,9 +230,21 @@ async function sendMessage(
 
   // Add each message to the batch buffer (synchronous, non-blocking)
   for (const msg of messages) {
+    const value = JSON.stringify(msg);
+    const size = Buffer.byteLength(value, 'utf8');
+
+    // A single message over the broker limit can never be delivered - drop it here
+    // instead of paying a rejected send + bisect in sendChunkSafely.
+    if (size > MAX_BATCH_BYTES) {
+      logger.error(
+        `Dropping oversized message on topic "${topic}" (${size} bytes, exceeds ${MAX_BATCH_BYTES})`,
+      );
+      continue;
+    }
+
     batchBuffer.add({
       topic,
-      value: JSON.stringify(msg),
+      value,
       timestamp: Date.now().toString(),
     });
   }
