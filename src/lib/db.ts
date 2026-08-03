@@ -19,8 +19,14 @@ export function getDatabaseType(url = process.env.DATABASE_URL) {
   return type;
 }
 
+// In development, everything reads from and writes to Postgres; every other
+// NODE_ENV keeps the ClickHouse/Kafka routing.
+export function isPrismaOnly() {
+  return process.env.NODE_ENV === 'development';
+}
+
 export async function runQuery(queries: any) {
-  if (process.env.CLICKHOUSE_URL) {
+  if (!isPrismaOnly() && process.env.CLICKHOUSE_URL) {
     if (queries[KAFKA]) {
       return queries[KAFKA]();
     }

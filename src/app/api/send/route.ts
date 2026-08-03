@@ -5,6 +5,7 @@ import { z } from 'zod';
 import clickhouse from '@/lib/clickhouse';
 import { CACHE_TOKEN_TYPE, COLLECTION_TYPE, EVENT_TYPE } from '@/lib/constants';
 import { getSalt, hash, secret, uuid } from '@/lib/crypto';
+import { isPrismaOnly } from '@/lib/db';
 import { getClientInfo, hasBlockedIp } from '@/lib/detect';
 import { createToken, parseToken } from '@/lib/jwt';
 import { fetchWebsite } from '@/lib/load';
@@ -177,8 +178,9 @@ export async function POST(request: Request) {
 
     const sessionId = id ? uuid(sourceId, id) : uuid(sourceId, ip, userAgent, sessionSalt);
 
-    // Create a session if not found
-    if (!clickhouse.enabled && !cache?.sessionId) {
+    // Create a session if not found. Development forces the Prisma path, so the
+    // session row must exist before the event's foreign key references it.
+    if ((isPrismaOnly() || !clickhouse.enabled) && !cache?.sessionId) {
       await createSession({
         id: sessionId,
         websiteId: sourceId,
